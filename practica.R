@@ -14,12 +14,14 @@ library("stringi")
 WORDS_FILENAME = "es_words.txt"
 
 
+# Carga las palabras del fichero y las devuelve como una cadena 
 load_words <- function(filename) {
   words_string_lines <- readLines(filename)
   words_string <- paste(words_string_lines, collapse = " ")
   return (unlist(strsplit(words_string, " ")))
 }
 
+# Quita las tildes de las palabras 
 remove_accents_from_word <- function(word) {
   removed <- stri_replace_all_regex(
     word,
@@ -30,6 +32,7 @@ remove_accents_from_word <- function(word) {
   return(removed)
 }
 
+# Devuelve las silabas de una palabra 
 get_word_syllables <- function(word) {
   word_hyphen <- sylly::hyphen(
     remove_accents_from_word(word), 
@@ -41,10 +44,16 @@ get_word_syllables <- function(word) {
   return (unlist(syllables))
 }
 
+# Devuelve las palabras que empiezan por <prefix>
 get_words_starting_by_prefix <- function(prefix, possible_words) {
   return (possible_words[which(startsWith(possible_words, prefix))])
 }
 
+
+# Devuelve las palabras cuya primera silaba es <syllable>
+# Pero es muy lento, asi que primero filtraremos las palabras 
+# que comienzan por <syllable> y solo despues veremos si es la 
+# silaba o no 
 #get_words_starting_by_syllable <- function(syllable, possible_words) {
 #  words <- c()
 #  for (word in possible_words) {
@@ -63,7 +72,8 @@ get_words_starting_by_prefix <- function(prefix, possible_words) {
 # return (words_starting_by_syllable[random_index])
 
 
-get_random_word_by_syllable <- function(syllable, possible_words) {
+# Devuelve una palabra random que empieza por la silaba
+get_random_word_by_prefix <- function(prefix, possible_words) {
   words_starting_by_prefix <- get_words_starting_by_prefix(
     syllable, 
     possible_words
@@ -77,15 +87,23 @@ get_random_word_by_syllable <- function(syllable, possible_words) {
 
 get_next_word <- function(word, possible_words) {
   syllables <- get_word_syllables(word)
-  return (
-    get_random_word_by_syllable(
-      syllables[length(syllables)],
+  last_syllable <- syllables[length(syllables)]
+  while (length(possible_words) != 0) {
+    result <- get_random_word_by_prefix(
+      last_syllable,
       possible_words
     )
-  )
+    result_syllables <- get_word_syllables(result)
+    if (result_syllables[1] == last_syllable)
+      return (result)
+    
+    possible_words <- possible_words[possible_words != result]
+  }
+  return (NULL)
 }
 
-build_chain <- function(word, words) {
+
+build_words_chain <- function(word, words) {
   chain <- c()
   for (i in 1:10000) {
     chain  <- append(chain, word)
@@ -100,8 +118,8 @@ build_chain <- function(word, words) {
 words <- load_words(WORDS_FILENAME)
 
 word <- "lata"
-cadena <- build_chain(word, words)
-print(paste(cadena, collapse = " -> "))
+chain <- build_words_chain(word, words)
+print(paste(chain, collapse = " -> "))
 
 
 
