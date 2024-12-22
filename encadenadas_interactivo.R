@@ -1,5 +1,6 @@
 # Incluimos las funciones de uso 
 source("lib.R")
+library("stringr")
 
 
 
@@ -8,7 +9,9 @@ run_game <- function() {
   last_word_syllables = NULL 
   
   while (TRUE) {
-    word <- readline(prompt = "Introduce una palabra: ")
+    word <- stringr::str_to_lower(
+      readline(prompt = "Introduce una palabra: ")
+    )
     if (word == "q" || word == "quit") {
       if (!is.null(last_word)) 
         cat(
@@ -87,7 +90,8 @@ run_game <- function() {
     # Comprobamos si existe alguna solucion 
     possible_user_input <- get_next_word(answer, SPANISH_WORDS)
     if (is.null(possible_user_input)) {
-      cat("Ya no se puede seguir. Ha perdido\n")
+      cat("Ya no se va poder encontrar la siguiente palabra porque no existe\n")
+      cat("Ha perdido\n")
       break
     }
     

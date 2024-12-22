@@ -1,0 +1,440 @@
+---
+title: "Practica grupo 3"
+author: "Makar Isaev"
+date: "2024-12-22"
+output: pdf_document
+---
+
+# Grupo 3
+### Emails de los participantes:
+- m.isaev@alumnos.upm.es - ISAEV MAKAR  
+- - MEDINA HERNANDEZ SERGIO
+- - MORAL MERINO ADA
+- - GARMENDIA GARCIA DAVID
+
+
+# Palabras encadenadas
+
+_Primero,_ se habia desarrollado una "libreria" que se va a usar en el proyecto. Se ha guardado en el archivo `lib.R` y contiene las funciones de uso que se van a aprovechar a continuación. 
+```{r}
+# Cargamos las librerias necesarias
+if (!require("sylly")) install.packages("sylly")
+
+library("sylly")
+if (!("sylly.es" %in% available.sylly.lang())) {
+  print("es is not available in sylly.lang")
+  print("installing es...")
+  install.sylly.lang(c("es"))
+}
+
+library("sylly.es")
+library("stringi")
+library("stringr")
+
+
+WORDS_FILENAME = "es_words.txt"
+
+
+# Carga las palabras del fichero y las devuelve como una cadena 
+load_words <- function(filename) {
+  words_string_lines <- stringr::str_to_lower(readLines(filename))
+  words_string <- paste(words_string_lines, collapse = " ")
+  words <- unlist(strsplit(words_string, " "))
+  return (words[nchar(words) >= 5])
+}
+
+# Quita las tildes de las palabras 
+remove_accents_from_word <- function(word) {
+  removed <- stri_replace_all_regex(
+    word,
+    pattern = c("[áàäâã]", "[éèëê]", "[íìïî]", "[óòöôõ]", "[úùüû]", "[ÁÀÄÂÃ]", "[ÉÈËÊ]", "[ÍÌÏÎ]", "[ÓÒÖÔÕ]", "[ÚÙÜÛ]"),
+    replacement = c("a", "e", "i", "o", "u", "A", "E", "I", "O", "U"),
+    vectorize_all = FALSE
+  )
+  return(removed)
+}
+
+# Devuelve las silabas de una palabra 
+get_word_syllables <- function(word) {
+  word_hyphen <- sylly::hyphen(
+    remove_accents_from_word(word), 
+    hyph.pattern = "es",
+    min.length = 2,
+    quiet = TRUE
+  )
+  syllables <- strsplit(word_hyphen[["word"]], "-")
+  return (unlist(syllables))
+}
+
+# Devuelve la lista de las silabas de una lista de palabras
+get_words_syllables <- function(words) {
+  words <- unlist(lapply(words, remove_accents_from_word))
+  words_hyphen <- sylly::hyphen(
+    words, 
+    hyph.pattern = "es",
+    min.length = 2,
+    quiet = FALSE
+  )
+  return (
+    strsplit(words_hyphen[["word"]], "-")
+  )
+}
+
+# Devuelve las palabras que empiezan por <prefix>
+get_words_starting_by_prefix <- function(prefix, possible_words) {
+  return (possible_words[which(startsWith(possible_words, prefix))])
+}
+
+# Devuelve una lista de las palabras que empiezan por la silaba dada
+get_words_starting_by_syllable <- function(syllable, possible_words) {
+  candidates <- get_words_starting_by_prefix(syllable, possible_words)
+  if (length(candidates) == 0) 
+    return (NULL)
+  
+  words_syllabes <- get_words_syllables(candidates)
+  words <- c()
+  for (i in 1:length(candidates)) {
+    word <- candidates[i]
+    syllables <- words_syllabes[[i]]
+    if (syllables[1] != syllable)
+      next 
+    words <- append(words, word)
+  }
+  return (words)
+}
+
+# Devuelve una palabra al azar que empieza por el prefix dado 
+get_random_word_by_prefix <- function(prefix, possible_words) {
+  words_starting_by_prefix <- get_words_starting_by_prefix(
+    prefix, 
+    possible_words
+  )
+  if (length(words_starting_by_prefix) == 0) {
+    return (NULL);
+  }
+  random_index <- sample(1:length(words_starting_by_prefix), 1)
+  return (words_starting_by_prefix[random_index])
+}
+
+
+# Devuelve la palabra siguiente para la cadena  
+get_next_word <- function(word, possible_words) {
+  syllables <- get_word_syllables(word)
+  last_syllable <- syllables[length(syllables)]
+  
+  prefix_words <- get_words_starting_by_prefix(
+    syllables[length(syllables)], 
+    possible_words
+  )
+  while (length(possible_words) != 0) {
+    result <- get_random_word_by_prefix(
+      last_syllable,
+      prefix_words
+    )
+    if (is.null(result))
+      break 
+    
+    result_syllables <- get_word_syllables(result)
+    if (result_syllables[1] == last_syllable && result != word)
+      return (result)
+    
+    prefix_words <- prefix_words[prefix_words != result]
+  }
+  return (NULL)
+}
+
+# Devuelve una palabra con la que no se pueda seguir la cadena 
+get_next_word_without_continuation <- function(word, possible_words) {
+  syllables <- get_word_syllables(word)
+  last_syllable <- syllables[length(syllables)]
+  
+  prefix_words <- get_words_starting_by_prefix(
+    syllables[length(syllables)], 
+    possible_words
+  )
+  while (length(possible_words) != 0) {
+    result <- get_random_word_by_prefix(
+      last_syllable,
+      prefix_words
+    )
+    if (is.null(result))
+      break 
+    
+    result_syllables <- get_word_syllables(result)
+    if (result_syllables[1] != last_syllable || result == word)
+      next 
+    
+    next_word <- get_next_word(result, possible_words)
+    if (is.null(next_word))
+      return (result)
+    
+    prefix_words <- prefix_words[prefix_words != result]
+  }
+  return (NULL)
+  
+} 
+
+# Construye una cadena de palabras eligiendolas al azar 
+build_words_chain <- function(word, words) {
+  chain <- c(word)
+  next_word <- get_next_word(word, words)
+  while (!is.null(next_word) && !(next_word %in% chain)) {
+    chain <- append(chain, next_word)
+    next_word <- get_next_word(next_word, words)
+  }
+  return (chain)
+}
+
+SPANISH_WORDS <- load_words(WORDS_FILENAME)
+```
+_lib.R_
+
+## Apartado 1
+Teniendo implementada la libreria (`lib.R`) resulta trivial implementar un programa que genera la cadena dado una palabra.
+Suponemos una palabra `mundo`:
+```{r}
+# Incluimos la libreria
+source("lib.R")
+
+word <- "mundo"
+chain <- build_words_chain(word, SPANISH_WORDS)
+print(paste(chain, collapse = " -> "))
+```
+Un resultado de su ejecucion seria el siguiente:
+```
+mundo -> dobladillaras -> rastrillaron -> roncharéis
+```
+Ademas, ya que elige cada siguiente palabra al azar, para la siguiente ejecucion, el resultado sera distinto:
+```
+mundo -> documentándose -> sepámoslas -> lastraríamos -> mostraba -> bajaron -> roncaleses -> sesteasteis
+```
+
+## Apartado 2
+Para implementar el juego con el usuario, aprovecharemos la libreria otra vez.
+```{r}
+# Incluimos la libreria
+source("lib.R")
+library("stringr")
+
+run_game <- function() {
+  last_word = NULL 
+  last_word_syllables = NULL 
+  
+  while (TRUE) {
+    word <- stringr::str_to_lower(
+      readline(prompt = "Introduce una palabra: ")
+    )
+    if (word == "q" || word == "quit") {
+      if (!is.null(last_word)) 
+        cat(
+          paste(
+            "Una palabra posible seria:",
+            get_next_word(last_word, SPANISH_WORDS)
+          )
+        )
+      break 
+    }
+    
+    # Comprobamos que la longitud es correcta
+    if (nchar(word) < 5) {
+      cat("La palabra tiene que ser por lo menos de 5 letras\n")
+      next
+    }
+    
+    word_syllables <- get_word_syllables(word)
+    # Vemos si la palabra esta en el diccionario
+    if (!(word %in% SPANISH_WORDS)) {
+      cat("Esta palabra no existe.\n")  
+      cat("Vuelve a introducir una correcta\n")
+      next 
+    }
+    
+    if (!is.null(last_word)) {
+      # Vemos si coinciden las silabas 
+      if (last_word_syllables[length(last_word_syllables)] != word_syllables[1]) {
+        cat(
+          paste(
+            "Las silabas de la palabra introducida son:", 
+            paste(word_syllables, collapse = "-"),
+            "\n"
+          )
+        )
+        cat("La ultima silaba de la palabra no coincide con la primera de la introducida\n")
+        cat("Vuelve a introducir una correcta\n")
+        next 
+      }
+    }
+    
+    # La palabra introducida es correcta
+    cat(
+      paste(
+        "La palabra introducida:",
+        word,
+        paste(word_syllables, collapse = "-"),
+        "\n"
+      )
+    )
+    
+    # Buscamos la respuesta 
+    # O bien intentamos buscar una palabra que no se pueda continuar 
+    # answer <- get_next_word_without_continuation(word, SPANISH_WORDS)
+    # if (is.null(answer))
+    #   answer <- get_next_word(word, SPANISH_WORDS)
+    # O jugamos al azar eligiendo cualquier palabra correcta para continuar 
+    answer <- get_next_word(word, SPANISH_WORDS)
+    
+    answer_syllables <- get_word_syllables(answer)
+    if (is.null(answer)) {
+      cat("No se ha podido encontrar la continuacion.\n")
+      cat("Usted ha ganado!\n")
+      break 
+    }
+    cat(
+      paste(
+        "La respuesta:", 
+        answer, 
+        paste(answer_syllables, collapse = "-"),
+        "\n",
+        collapse = " "
+      )
+    )
+    
+    # Comprobamos si existe alguna solucion 
+    possible_user_input <- get_next_word(answer, SPANISH_WORDS)
+    if (is.null(possible_user_input)) {
+      cat("Ya no se va poder encontrar la siguiente palabra porque no existe\n")
+      cat("Ha perdido\n")
+      break
+    }
+    
+    last_word <- answer 
+    last_word_syllables <- answer_syllables 
+  }
+}
+```
+Este programa se puede ejecutar llamando la funcion `run_game` como se hace en el archivo `encadenadas_interactivo.R`. 
+Para salir del juego hay que introducir la letra `q`. 
+Hay que notar que se puede aprovechar dos metodos de la eleccion de la siguiente palabra: 
+- Intentando elegir una que no se pueda continuar
+- O eligiendo la palabra al azar
+Para cambiar este comportamiento, hay que quitar el comentario en la linea correspondiente.
+
+Ademas, este programa tiene en cuenta la situacion cuando el usuario ya no puede encontrar la continuacion para la palabra y en este caso termina el juego. 
+
+
+
+## Apartado 3
+El programa elige al azar las palabras del diccionario y construye las cadenas. La variable `NUMBER_OF_CHAINS` corresponde al numero de cadenas que se van a construir y al final se eligira la cadena mas larga. 
+```{r}
+source("lib.R")
+
+
+NUMBER_OF_CHAINS = 10
+
+random_words <- sample(SPANISH_WORDS, NUMBER_OF_CHAINS)
+
+
+chains <- list()
+for (word in random_words) {
+  chains <- append(
+    chains, 
+    list(build_words_chain(word, SPANISH_WORDS))
+  )
+}
+
+
+max_chain <- chains[[1]]
+for (chain in chains) {
+  if (length(chain) > length(max_chain))
+    max_chain <- chain 
+}
+
+# Con 1000 cadenas se ha podido llegar a 28 palabras en una cadena
+# desfortalezcámosles leste tenerles lestrigón gongorizo zonificara rarificarme merineros roscaderos rosqueaban bandearíamos mostrencos costillaje jeringasen sentadlas lastrare regenérale levitases sesgáramos mostradles lesbianas nastuerzo zoquetearé refractaras rasguñaré retinarán ranciedad dadlos
+cat(max_chain)
+```
+Sin embargo si no nos ponemos a construir las cadenas al azar, sino hacemos una "busqueda en profundiad", llegaremos a resolver el problema de manera mas eficiente.
+
+```{r}
+build_words_chain_for_length <- function(chain, target) {
+  if (length(chain) > target)
+    return (chain) 
+  
+  last_word <- chain[length(chain)]
+  last_word_syllables <- get_word_syllables(last_word)
+  possible_words <- get_words_starting_by_prefix(
+    last_word_syllables[length(last_word_syllables)], 
+    SPANISH_WORDS
+  )
+  for (word in possible_words) {
+    if (get_word_syllables(word)[1] != last_word_syllables[length(last_word_syllables)]) 
+      next
+    
+    return (
+      build_words_chain_for_length(
+        append(chain, word), 
+        target
+      )
+    )
+  }
+  return (chain)
+}
+
+build_words_chain_for_length(c("loro"), 20)
+```
+Asi mismo, hacemos algo parecido a una busqueda en profundidad hasta llegar a la longitud esperada de la cadena (para 200 tarda lo suyo, pero si llega ya que encuentra anillos). 
+
+
+## Apartado 4 
+Ya en el apartado 3 se habian determinado los anillos. 
+Sin embargo para determinar el anillo mas largo posible, no hemos encontrado un algoritmo lo suficientemente eficiente como para poder ejecutarlo en un tiempo limitado. 
+
+---
+
+Una opcion "clasica" que se habia considerado fue crear una matriz de aristas de la siguiente manera: 
+_Se pone un uno en la casilla cuando la ultima silaba de la palabra de la fila coincide con la primera de la palabra de la columna_
+```
+# /////   mundo   domino
+# mundo   0       1 
+# domino  0       0 
+```
+Pero la construccion de dicha matriz resulto ser muy lenta. 
+
+---
+
+Tambien, se habia intentado realizar una "busqueda en profundidad" como en el apartado 3 manteniendo una lista de palabras usadas e intentando llegar a una longitud de la cadena establecido. Sin embargo tambien resulto ser imposible por la potencia computocional.
+
+---
+
+Concluyendo, no se ha podido determinar el anillo mas largo debido a las limitaciones de la potencia computocional. 
+
+---
+
+# Tareas realizadas 
+- Apartado 1 (MAKAR ISAEV 50%, MEDINA HERNANDEZ SERGIO 50%)
+- Apartado 2 (MORAL MERINO ADA 50%, GARMENDIA GARCIA DAVID 50%)
+- Apartado 3 (MORAL MERINO ADA 33%, MEDINA HERNANDEZ SERGIO 33%, MAKAR ISAEV 33%)
+- Apartado 4 (GARMENDIA GARCIA DAVID 50%, MAKAR ISAEV 50%)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
